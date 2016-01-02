@@ -1,0 +1,7 @@
+nltk >= 2.7.0
+many_stop_words
+shapely
+numpy
+scipy
+python-dateutil                                          
+sklearn
