@@ -3,14 +3,14 @@ from __future__ import unicode_literals
 
 from nltk.tag import StanfordPOSTagger
 from stanford_segmenter import StanfordSegmenter
+from settings import *
 import os
 
 
 def postag_sents(sents):
     if not os.environ.get('STANFORD_MODELS'):
-        base = os.getcwd()+'/stanford-postagger'
-        os.environ["STANFORD_MODELS"] = base+'/models'
-        os.environ['CLASSPATH'] = base
+        base = APP_HOME + '/stanford-postagger'
+        os.environ["STANFORD_MODELS"] = base + '/models'
         
     st = StanfordPOSTagger('arabic.tagger', base+'/combined.jar')
     tagged_sents = st.tag_sents(sents)
@@ -21,7 +21,7 @@ def postag_sents(sents):
 
 def segment_sents(sents):
     if not os.environ.get('STANFORD_SEGMENTER'):
-        os.environ['STANFORD_SEGMENTER'] = 'stanford_segmenter'
+        os.environ['STANFORD_SEGMENTER'] = 'APP_HOME' + '/stanford_segmenter'
         
     segmenter = StanfordSegmenter()
     tokens = segmenter.segment_sents(sents)
@@ -30,13 +30,5 @@ def segment_sents(sents):
 
 
 if __name__=='__main__':
-    sents = [u'دي الجملة الأولى', u'ودي الجملة التانية']
-    tokens = segment_sents(sents)
-    tagged_tokens = postag_sents(tokens)
-    for sent in tagged_tokens:
-        print u','.join([u'#'.join(t) for t in sent])
-        #for t in sent:
-            #print('#'.join(t))
-
-
+    pass
 

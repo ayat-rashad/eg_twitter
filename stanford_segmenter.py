@@ -11,6 +11,8 @@ from subprocess import PIPE
 from nltk import compat
 from nltk.internals import find_jar, config_java, java, _java_options
 from nltk.tokenize.api import TokenizerI
+
+from settings import *
  
 class StanfordSegmenter(TokenizerI): 
     _JAR = 'stanford-segmenter.jar'
@@ -26,10 +28,10 @@ class StanfordSegmenter(TokenizerI):
         self._stanford_jar = find_jar(
                 self._JAR, path_to_jar,
                 env_vars=('STANFORD_SEGMENTER',),
-                searchpath=(),
+                searchpath=(STANFORD_SEGMENTER,),
                 verbose=verbose
             )
-        self._model = os.environ['STANFORD_SEGMENTER'] + '/%s' %path_to_model
+        self._model = STANFORD_SEGMENTER + '/%s' %path_to_model
         self._encoding = encoding
         self.java_options = java_options
         options = {} if options is None else options

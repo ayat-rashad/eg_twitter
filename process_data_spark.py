@@ -7,13 +7,14 @@ from nltk.probability import FreqDist, ConditionalFreqDist
 import re, string, nltk,sys
 from nltk import wordpunct_tokenize
 from pos_tag import postag_sents, segment_sents
-import json
+import json, os
+from settings import *
 import logger
 import logging
 
 
 logger = logging.getLogger('.log')
-conf = SparkConf().setAppName('eg_twitter').setMaster('local')
+conf = SparkConf().setAppName(APP_NAME)
 sc = SparkContext(conf=conf)
 
 def printu(lst, prnt=True):
@@ -116,7 +117,6 @@ def reduce_text(t1, t2):
 def summarize_tweet(tweet):
     if not tweet.get('text'):
         raise Exception('This is not a tweet.')
-        return
     
     words = FreqDist()
     tags = FreqDist() 
@@ -182,7 +182,7 @@ def main(data=None, fname='test.json'):
     if data != None:
         data_rdd = sc.parallelize(data)
     else:
-        data_rdd = sc.textFile(fname)
+        data_rdd = sc.textFile('file://%s/%s' %(APP_HOME, fname))
         
     data_rdd_json = read_json(data_rdd)
     data_rdd_json = data_rdd_json.mapPartitions(process_partition)
@@ -210,4 +210,4 @@ def main(data=None, fname='test.json'):
 if __name__ == '__main__':
     main()
     
-    
+
