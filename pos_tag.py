@@ -9,10 +9,9 @@ import os
 
 def postag_sents(sents):
     if not os.environ.get('STANFORD_MODELS'):
-        base = APP_HOME + '/stanford-postagger'
-        os.environ["STANFORD_MODELS"] = base + '/models'
+        os.environ["STANFORD_MODELS"] = STANFORD_MODELS
         
-    st = StanfordPOSTagger('arabic.tagger', base+'/combined.jar')
+    st = StanfordPOSTagger('arabic.tagger', STANFORD_POSTAGGER + '/combined.jar')
     tagged_sents = st.tag_sents(sents)
     tagged_sents = [[tuple(t[1].split('/'))  for t in sent] for sent in tagged_sents]
     
@@ -21,7 +20,7 @@ def postag_sents(sents):
 
 def segment_sents(sents):
     if not os.environ.get('STANFORD_SEGMENTER'):
-        os.environ['STANFORD_SEGMENTER'] = 'APP_HOME' + '/stanford_segmenter'
+        os.environ['STANFORD_SEGMENTER'] = STANFORD_SEGMENTER
         
     segmenter = StanfordSegmenter()
     tokens = segmenter.segment_sents(sents)
