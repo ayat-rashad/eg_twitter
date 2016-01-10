@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style type="text/css">
+        body {
+            margin: 0;
+            padding: 10px 20px 20px;
+            font-family: Arial;
+            font-size: 16px;
+        }
+        
+        #map-container {
+            padding: 6px;
+            border-width: 1px;
+            border-style: solid;
+            border-color: #ccc #ccc #999 #ccc;
+            -webkit-box-shadow: rgba(64, 64, 64, 0.5) 0 2px 5px;
+            -moz-box-shadow: rgba(64, 64, 64, 0.5) 0 2px 5px;
+            box-shadow: rgba(64, 64, 64, 0.1) 0 2px 5px;
+            width: 600px;
+        }
+        
+        #map {
+            width: 600px;
+            height: 550px;
+        }
+        
+        #actions {
+            list-style: none;
+            padding: 0;
+        }
+        
+        #inline-actions {
+            padding-top: 10px;
+        }
+        
+        .item {
+            margin-left: 20px;
+        }
+        
+        .labels {
+            color: black;
+            font-family: "Lucida Grande", "Arial", sans-serif;
+            font-size: 14px;
+            text-align: center;
+            width: 30px;
+            white-space: nowrap;
+        }
+	
+
+
+        .chart rect {
+          fill: steelblue;
+        }
+        
+        .chart text {
+          fill: white;
+          font: 10px sans-serif;
+          text-anchor: end;
+        }
+
+</style>
+	<meta charset="utf-8">
+	<script src="//d3js.org/d3.v3.min.js" charset="utf-8"></script>
+    <script src="https://maps.googleapis.com/maps/api/js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+    <script src="http://google-maps-utility-library-v3.googlecode.com/svn/trunk/markerwithlabel/src/markerwithlabel.js"></script>
+    <script type="text/javascript" src="markerclusterer.js"></script>
+</head>
+
+<body>
+<svg class="chart"></svg>
+
+	<script>
+	var midZoom = 9;
+	var map;
+    var markerCluster;
+	
+	function getHashtagData(htag, includeTweet, bounds) {
+            var counts = [];
+			var sw = bounds.getSouthWest();
+            var ne = bounds.getNorthEast();
+						
+            $.post("/hashtag/" + htag + "/" + includeTweet + "/" + sw.lat() +
+							   	 	   "/" + ne.lat() + "/" + ne.lng() + "/" + sw.lng(), function(data) {
+                data = $.parseJSON(data);
+				data = data[0];
+                var markers = [];
+				
+				if (includeTweet) {
+				   //alert(data.tweets.length);				   
+				   for (var i = 0; i < data.tweets.length; i++) {
+                        var tweet = data.tweets[i];
+                        var latLng = new google.maps.LatLng(tweet.loc.coordinates[1], tweet.loc.coordinates[0]);
+    
+                        var marker = new MarkerWithLabel({
+                            position: latLng,
+                            labelContent: "",
+                            count: 1,
+                            labelAnchor: new google.maps.Point(15, 35),
+                            labelClass: "labels",
+                            labelInBackground: false,
+							info: new google.maps.InfoWindow({content: tweet.tweet}), 
+							icon: {url: "Twitter-256.png", size: new google.maps.Size(20, 32),
+								  origin: new google.maps.Point(0, 0),
+    							  anchor: new google.maps.Point(0, 32)}
+                        });
+                    
+                        
+                        marker.addListener('mouseover', function() {
+						  //var infowindow = new google.maps.InfoWindow({content: this.info});
+						  //infoWindow.setContent( this.info );
+   						  this.info.open(map, this);
+                        });
+    
+                        markers.push(marker);
+    
+                    }
+				}
+				
+				else
+                    for (var i = 0; i < data.places.length; i++) {
+                        var cluster = data.places[i];
+                        var latLng = new google.maps.LatLng(cluster.loc[1], cluster.loc[0]);
+    
+                        var marker = new MarkerWithLabel({
+                            position: latLng,
+                            labelContent: cluster.count.toString(),
+                            count: cluster.count,
+                            labelAnchor: new google.maps.Point(15, 35),
+                            labelClass: "labels",
+                            labelInBackground: false,
+                            icon: 'https://google-maps-utility-library-v3.googlecode.com/svn/trunk/markerclusterer/images/m1.png'
+                        });
+    
+                        markers.push(marker);
+    
+                    }
+                markerCluster.addMarkers(markers);
+
+
+            });
+        }
+
+	function getHashtags() {
+            var htags = [];
+			var sortBy = "mentions";
+			var includeTweet = 0;
+			var NTags = 10;
+			
+            $.post("/hashtags/" + sortBy + "/" + includeTweet + "/" + NTags, function(data) {
+                data = $.parseJSON(data);
+                var width = 420, barHeight = 20;
+				
+       			data.getmentions = function() {
+       						  var mentions = [];
+                                 for (i = 0; i < this.length; i++) {
+                                     mentions.push(this[i].mentions);
+                                 }
+                                 return mentions;
+                             };
+       			var mentions = data.getmentions();
+				       
+               var x = d3.scale.linear()
+                   .domain([0, d3.max(mentions)])
+                   .range([0, width]);
+				   
+               
+               var chart = d3.select(".chart")
+                   .attr("width", width)
+                   .attr("height", barHeight * data.length);
+               
+               var bar = chart.selectAll("g")
+                   .data(data)
+                 .enter().append("g")
+                   .attr("transform", function(d, i) { return "translate(0," + i * barHeight + ")"; });
+               
+               bar.append("rect")
+                   .attr("width", function(d){ return x(d.mentions);	})
+                   .attr("height", barHeight - 1);
+               
+               bar.append("text")
+                   .attr("x", function(d) { return x(d.mentions) - 3; })
+                   .attr("y", barHeight / 2)
+                   .attr("dy", ".35em")
+                   .text(function(d) { return d.mentions; });
+				   
+			  bar.append("text")
+                   .attr("x", function(d) { return d.hashtag.length * 5; })
+                   .attr("y", barHeight / 2)
+                   .attr("dy", ".35em")
+				   .attr("class", "hashtagLabel")
+                   .text(function(d) { return d.hashtag; });
+				   
+			  $(".hashtagLabel").click(function(ht) {
+			  										markerCluster.clearMarkers();
+			  										var includeTweet = 0;
+			  										var hashtag = $(this).text();
+													
+													if (map.getZoom() >= midZoom)
+													   includeTweet = 1;
+													   
+													$("#hashtag").text(hashtag);
+													getHashtagData(hashtag, includeTweet, map.getBounds());
+			  										});
+   
+
+            });
+
+        }
+		
+
+///////////////////////////////////////////////////////////////////////////////
+        function getPoints(bounds) {
+            var cells = [];
+            var sw = bounds.getSouthWest();
+            var ne = bounds.getNorthEast();
+            $.post("/cells/" + sw.lat() + "/" + ne.lat() + "/" + ne.lng() + "/" + sw.lng(), function(data) {
+                data = $.parseJSON(data);
+                var markers = [];
+                for (var i = 0; i < data.length; i++) {
+                    var cell = data[i];
+                    var latLng = new google.maps.LatLng(cell.lat, cell.long);
+                    var marker = new google.maps.Marker({
+                        position: latLng,
+                        count: 1
+                    });
+                    markers.push(marker);
+
+                }
+                markerCluster.addMarkers(markers);
+
+
+            });
+
+        }
+
+        function getClusters(bounds) {
+            var counts = [];
+            var sw = bounds.getSouthWest();
+            var ne = bounds.getNorthEast();
+            $.post("/cluster/" + sw.lat() + "/" + ne.lat() + "/" + ne.lng() + "/" + sw.lng(), function(data) {
+                data = $.parseJSON(data);
+                var markers = [];
+				
+                for (var i = 0; i < data.length; i++) {
+                    var cluster = data[i];
+                    var latLng = new google.maps.LatLng(cluster.lat, cluster.long);
+
+                    var marker = new MarkerWithLabel({
+                        position: latLng,
+                        labelContent: cluster.count.toString(),
+                        count: cluster.count,
+                        labelAnchor: new google.maps.Point(15, 35),
+                        labelClass: "labels",
+                        labelInBackground: false,
+                        icon: 'https://google-maps-utility-library-v3.googlecode.com/svn/trunk/markerclusterer/images/m1.png'
+                    });
+
+                    markers.push(marker);
+
+                }
+                markerCluster.addMarkers(markers);
+
+
+            });
+        }
+
+        function initialize() {
+			getHashtags();
+			
+            var center = new google.maps.LatLng(27.4419, 30.005);
+			var midZoom = 9;
+			
+            map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 6,
+                center: center,
+                mapTypeId: google.maps.MapTypeId.ROADMAP
+            });
+			
+            markerCluster = new MarkerClusterer(map);
+			markerCluster.setGridSize(15);
+            
+            markerCluster.setCalculator(function(markers, numStyles) {
+                var index = 0;
+                var total = 0;
+                var count = markers.length;
+                var dv = count;
+				
+                while (dv !== 0) {
+                    dv = parseInt(dv / 10, 10);
+                    index++;
+                }
+                for (var i = 0; i < markers.length; i++) {
+                    total = total + markers[i].count;
+                }
+
+                index = Math.min(index, numStyles);
+                return {
+                    text: total,
+                    index: index
+                };
+            });
+			
+			function getData() {
+                markerCluster.clearMarkers();
+				
+				if ($("#hashtag").text() == "")
+				   	return;
+					
+				var htag = $("#hashtag").text();
+				
+                if (map.getZoom() >= midZoom)
+                    getHashtagData(htag, 1, map.getBounds());
+                else
+                    getHashtagData(htag, 0, map.getBounds());
+			}
+
+            map.addListener('zoom_changed', getData);
+            map.addListener('dragend', getData);
+            google.maps.event.addListenerOnce(map, 'idle', function() {
+                //getClusters(map.getBounds());
+            });
+
+        }
+        //google.maps.event.addDomListener(window, 'load', initialize);
+		window.onload = initialize;
+    </script>
+    <script>
+        var _gaq = _gaq || [];
+        _gaq.push(['_setAccount', 'UA-12846745-20']);
+        _gaq.push(['_trackPageview']);
+        (function() {
+            var ga = document.createElement('script');
+            ga.type = 'text/javascript';
+            ga.async = true;
+            ga.src = ('https:' === document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(ga, s);
+        })();
+    </script>
+    </head>
+
+    <body>
+		<div class="htagContainer"><p>Distribution of tag:<span id="hashtag"></span></p></div>
+        <div id="map-container">
+            <div id="map"></div>
+        </div>
+    </body>
+
+</html>
