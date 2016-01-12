@@ -3,19 +3,19 @@ from __future__ import unicode_literals
 
 from pyspark import SparkContext, SparkConf
 from many_stop_words import get_stop_words
-from nltk.probability import FreqDist, ConditionalFreqDist
-import re, string, nltk,sys
+from shapely.geometry import Polygon
+
 from nltk import wordpunct_tokenize
+from nltk.probability import FreqDist, ConditionalFreqDist
+
+import re, string, nltk, sys
+import json, os, logging
+from collections import defaultdict
+
 from pos_tag import postag_sents, segment_sents
-import json, os
 from settings import *
 import logger
-import logging
 
-
-logger = logging.getLogger('.log')
-conf = SparkConf().setAppName(APP_NAME)
-sc = SparkContext(conf=conf)
 
 def printu(lst, prnt=True):
     s = u'.'.join(lst).encode('utf-8')
@@ -38,8 +38,10 @@ def preprocess(txt):
             
 def summarize(data):
     words = FreqDist()
-    tags = FreqDist() 
+    tags = ConditionalFreqDist()
+    spreads = defaultdict(list)
     places = FreqDist()
+    places_geo = dict()
     bigrams = FreqDist()
     stopwords = get_stop_words('ar')   
     
@@ -50,7 +52,14 @@ def summarize(data):
             words[word] += 1
             
         for tag in tweet['hashtags']:
-            tags[tag['text']] += 1
+            if tweet['place']:
+                tags[ tag['text'] ][ tweet['place']['name'] ] += 1
+                places_geo[tweet['place']['name']] = Polygon(tweet['place']['bounding_box']['coordinates'][0]).centroid.coords[0]
+            else:
+                tags[ tag['text'] ][ None ] += 1
+                
+            if tweet['coordinates']:
+                spreads[tag['text']].append(tweet['coordinates']['coordinates'])            
             
         if tweet['place']:
             places[ tweet['place']['name'] ] += 1
@@ -61,12 +70,8 @@ def summarize(data):
     for word in words:
         if word in stopwords:
             words.pop(word)
-                                   
-    print 'Top 50 hashtags:', printu([t[0] for t in tags.most_common(50)])
-    print 'Top 50 words:', printu([w[0] for w in words.most_common(50)])
-    print 'Top 10 places:', printu([p[0] for p in places.most_common(10)])
-    
-    return tags, words, places
+                                       
+    return tags, words, places, spreads, places_geo
 
           
 def filter_words(words):
@@ -178,13 +183,28 @@ def process_partition(data):
     return data
 
 
-def main(data=None, fname='test.json'):
+def main(data=None, fname=None):
+    logger = logging.getLogger('.log')
+    conf = SparkConf().setAppName(APP_NAME)
+
+    for prop, val in CONF.items():
+        conf.set(prop, val)         #set configuration properties
+    
+    sc = SparkContext(conf=conf, environment=ENV_VARS)
+    
+    for f in PY_FILES:          #add dependencies
+        sc.addPyFile('%s://%s/%s' %(FILESYSTEM, APP_HOME, f))
+    
     if data != None:
         data_rdd = sc.parallelize(data)
-    else:
-        data_rdd = sc.textFile('file://%s/%s' %(APP_HOME, fname))
         
-    data_rdd_json = read_json(data_rdd)
+    elif fname:
+        data_rdd = sc.textFile('file://%s/%s' %(APP_HOME, fname))
+        data_rdd_json = read_json(data_rdd)
+        
+    else:           #read data from database
+        data_rdd_json = sc.mongoRDD('mongodb://%s:%d/%s.tweets' %(MONGO_SERVER, MONGO_PORT, DB))    
+    
     data_rdd_json = data_rdd_json.mapPartitions(process_partition)
     tags, words, places, bigrams = data_rdd_json.map(summarize_tweet).reduce(reduce_tweets)
     words = filter_words(words) 
