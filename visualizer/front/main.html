@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html class="">
+<meta charset="utf-8">
+<title></title>
+<style>
+@import url(style.css?aea6f0a);
+
+svg {
+  font: 10px sans-serif;
+}
+
+.bar rect {
+  fill: steelblue;
+}
+
+.bar:hover rect {
+  fill: brown;
+}
+
+.value {
+  fill: white;
+}
+
+.axis {
+  shape-rendering: crispEdges;
+}
+
+.axis path {
+  stroke: none;
+}
+
+.x.axis line {
+  stroke: #fff;
+  stroke-opacity: .8;
+}
+
+.y.axis path {
+  stroke: black;
+}
+
+text {
+	 font-size: 1.4em;
+	 color: grey;
+}
+
+#map-container {
+    padding: 6px;
+    border-width: 1px;
+    border-style: solid;
+    border-color: #ccc #ccc #999 #ccc;
+    -webkit-box-shadow: rgba(64, 64, 64, 0.5) 0 2px 5px;
+    -moz-box-shadow: rgba(64, 64, 64, 0.5) 0 2px 5px;
+    box-shadow: rgba(64, 64, 64, 0.1) 0 2px 5px;
+    width: 600px;
+	margin-left: 160px;
+}
+        
+#map {
+	 width: 600px;
+  	 height: 550px;
+}
+
+.labels {
+    color: black;
+    font-family: "Lucida Grande", "Arial", sans-serif;
+    font-size: 14px;
+    text-align: center;
+    width: 30px;
+    white-space: nowrap;
+}
+        
+        
+
+</style>
+<script src="//d3js.org/d3.v3.min.js" charset="utf-8"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+<script src="https://maps.googleapis.com/maps/api/js"></script>
+<script src="http://google-maps-utility-library-v3.googlecode.com/svn/trunk/markerwithlabel/src/markerwithlabel.js"></script>
+<script type="text/javascript" src="markerclusterer.js"></script>
+
+<header>
+</header>
+
+<p id="chart">
+
+<p id="menu"><b>Top Hashtags</b><br> <select></select>
+
+
+<script>
+
+var margin = {top: 20, right: 40, bottom: 10, left: 40},
+    width = 960,
+    height = 250 - margin.top - margin.bottom;
+
+var format = d3.format(".1");
+
+var x = d3.scale.linear()
+    .range([60, width]);
+
+var y = d3.scale.ordinal()
+    .rangeRoundBands([0, height], .1);
+
+var xAxis = d3.svg.axis()
+    .scale(x)
+    .orient("top")
+    .tickSize(-height - margin.bottom)
+    .tickFormat(format);
+
+var svg = d3.select("#chart").append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+    .style("padding-left", 120 + "px")
+  .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+svg.append("g")
+    .attr("class", "x axis");
+
+svg.append("g")
+    .attr("class", "y axis")
+  .append("line")
+    .attr("class", "domain")
+    .attr("y2", height);
+
+var menu = d3.select("#menu select")
+    .on("change", change);
+	
+var hashtagsData;
+
+var midZoom = 11;
+
+var map;
+
+var markerCluster;
+
+var altKey;
+
+
+/*d3.csv("states-age.csv", function(data) {
+  menu.selectAll("option")
+      .data(ages)
+    .enter().append("option")
+      .text(function(d) { return d; });
+
+  menu.property("value", "18 to 24 Years");
+
+  redraw();
+});*/
+
+
+d3.select(window)
+    .on("keydown", function() { altKey = d3.event.altKey; })
+    .on("keyup", function() { altKey = false; });
+
+function change() {
+  clearTimeout(timeout);
+
+  d3.transition()
+      .duration(altKey ? 7500 : 750)
+      .each(redraw);
+}
+
+function getHashtags() {
+    var htags = [];
+    var sortBy = "mentions";
+    var includeTweet = 0;
+    var NTags = 10;
+
+    $.post("/hashtags/" + sortBy + "/" + includeTweet + "/" + NTags, function(data) {
+        data = $.parseJSON(data);
+        hashtagsData = data;
+		redraw();
+
+    });
+
+}
+
+
+function getHashtagData(htag, includeTweet, bounds) {
+    var counts = [];
+    var sw = bounds.getSouthWest();
+    var ne = bounds.getNorthEast();
+
+    $.post("/hashtag/" + htag + "/" + includeTweet + "/" + sw.lat() +
+        "/" + ne.lat() + "/" + ne.lng() + "/" + sw.lng(),
+        function(data) {
+            data = $.parseJSON(data);
+            data = data[0];
+            var markers = [];
+
+            if (includeTweet) {
+                for (var i = 0; i < data.tweets.length; i++) {
+                    var tweet = data.tweets[i];
+                    var latLng = new google.maps.LatLng(tweet.loc.coordinates[1], tweet.loc.coordinates[0]);
+
+                    var marker = new MarkerWithLabel({
+                        position: latLng,
+                        labelContent: "",
+                        count: 1,
+                        labelAnchor: new google.maps.Point(15, 35),
+                        labelClass: "labels",
+                        labelInBackground: false,
+                        info: new google.maps.InfoWindow({
+                            content: tweet.tweet
+                        }),
+                        icon: "images/twitter-small.png"
+                    });
+
+
+                    marker.addListener('mouseover', function() {
+                        this.info.open(map, this);
+                    });
+
+					marker.addListener('mouseout', function() {
+                        this.info.close(map, this);
+                    });
+
+                    markers.push(marker);
+
+                }
+            } else
+                for (var i = 0; i < data.clusters.length; i++) {
+                    var cluster = data.clusters[i];
+                    var latLng = new google.maps.LatLng(cluster.loc[1], cluster.loc[0]);
+
+                    var marker = new MarkerWithLabel({
+                        position: latLng,
+                        labelContent: cluster.count.toString(),
+                        count: cluster.count,
+                        labelAnchor: new google.maps.Point(15, 35),
+                        labelClass: "labels",
+                        labelInBackground: false,
+                        icon: 'images/twitter.png',
+						info: new google.maps.InfoWindow({
+                            content: cluster.text
+                        })
+                    });
+					
+					marker.addListener('mouseover', function() {
+                        this.info.open(map, this);
+                    });
+					
+					marker.addListener('mouseout', function() {
+                        this.info.close(map, this);
+                    });
+
+                    markers.push(marker);
+
+                }
+            markerCluster.addMarkers(markers);
+
+
+        });
+}
+
+
+function redraw() {
+
+  y.domain(hashtagsData.map(function(d) { return d.hashtag; }));
+
+  var bar = svg.selectAll(".bar")
+      .data(hashtagsData, function(d) { return d.hashtag; });
+
+  var barEnter = bar.enter().insert("g", ".axis")
+      .attr("class", "bar")
+      .attr("transform", function(d) { return "translate(0," + (y(d.hashtag) + height) + ")"; })
+      .style("fill-opacity", 0);
+
+  barEnter.append("rect")
+      .attr("width", function(d) { return x(d.mentions); })
+      .attr("height", y.rangeBand());
+
+  barEnter.append("text")
+	  .attr("class", "label hashtagLabel")
+      .attr("x", -3)
+      .attr("y", y.rangeBand() / 2)
+      .attr("dy", ".35em")
+      .attr("text-anchor", "end")
+	  .style("font-size", "1.5em")
+      .text(function(d) { return d.hashtag; });
+	  
+  $('.bar').css('cursor', 'pointer');
+  
+  $(".bar").click(function(b) {
+      markerCluster.clearMarkers();
+      var includeTweet = 0;
+      var hashtag = $(this).find(".hashtagLabel").text();
+
+      if (map.getZoom() >= midZoom)
+          includeTweet = 1;
+
+      $("#hashtag").text(hashtag);
+      getHashtagData(hashtag, includeTweet, map.getBounds());
+  });
+
+  barEnter.append("text")
+      .attr("class", "value")
+      .attr("x", function(d) { return x(d.mentions) - 3; })
+      .attr("y", y.rangeBand() / 2)
+      .attr("dy", ".35em")
+      .attr("text-anchor", "end");
+
+  x.domain([0, hashtagsData[0].mentions]);
+
+  var barUpdate = d3.transition(bar)
+      .attr("transform", function(d) { return "translate(0," + (d.y0 = y(d.hashtag)) + ")"; })
+      .style("fill-opacity", 1);
+
+  barUpdate.select("rect")
+      .attr("width", function(d) { return x(d.mentions); });
+
+  barUpdate.select(".value")
+      .attr("x", function(d) { return x(d.mentions) - 3; })
+      .text(function(d) { return format(d.mentions); });
+
+  var barExit = d3.transition(bar.exit())
+      .attr("transform", function(d) { return "translate(0," + (d.y0 + height) + ")"; })
+      .style("fill-opacity", 0)
+      .remove();
+
+  barExit.select("rect")
+      .attr("width", function(d) { return x(d.mentions); });
+
+  barExit.select(".value")
+      .attr("x", function(d) { return x(d.mentions) - 3; })
+      .text(function(d) { return format(d.mentions); });
+
+  d3.transition(svg).select(".x.axis")
+      .call(xAxis);
+
+  }
+  
+  
+function initialize() {
+    getHashtags();
+
+    var center = new google.maps.LatLng(27.4419, 30.005);
+    var midZoom = 9;
+
+    map = new google.maps.Map(document.getElementById('map'), {
+        zoom: 6,
+        center: center,
+        mapTypeId: google.maps.MapTypeId.ROADMAP
+    });
+ 
+    markerCluster = new MarkerClusterer(map);
+    markerCluster.setGridSize(5);
+
+    markerCluster.setCalculator(function(markers, numStyles) {
+        var index = 0;
+        var total = 0;
+        var count = markers.length;
+        var dv = count;
+
+        while (dv !== 0) {
+            dv = parseInt(dv / 10, 10);
+            index++;
+        }
+		
+		//markers.sort(function(a, b){
+			//return b.retweets - a.retweets;
+		 //});
+		 
+		//var txt = markers.slice(0,5).join("\n");
+		 
+		for (var i = 0; i < markers.length; i++) {
+            total = total + markers[i].count;
+        }
+
+        index = Math.min(index, numStyles);
+        return {
+            text: total,
+            index: index
+        };
+    });
+
+    function getData() {
+        markerCluster.clearMarkers();
+
+        if ($("#hashtag").text() == "")
+            return;
+
+        var htag = $("#hashtag").text();
+
+        if (map.getZoom() >= midZoom)
+            getHashtagData(htag, 1, map.getBounds());
+        else
+            getHashtagData(htag, 0, map.getBounds());
+    }
+
+    map.addListener('zoom_changed', getData);
+    map.addListener('dragend', getData);
+    google.maps.event.addListenerOnce(map, 'idle', function() {
+        //getClusters(map.getBounds());
+    });
+
+}
+
+window.onload = initialize;
+
+//var timeout = setTimeout(function() {
+  //menu.property("value", "65 Years and Over").node().focus();
+  //change();
+//}, 5000);
+//getHashtags();
+
+</script>
+
+
+<script>
+
+</script>
+<script async src="highlight.min.js"></script>
+<script async src="//www.google-analytics.com/analytics.js"></script>
+
+<div class="htagContainer">
+    <p>Distribution of tag:  <span id="hashtag"></span></p>
+</div>
+
+<div id="map-container">
+            <div id="map"></div>
+        </div>

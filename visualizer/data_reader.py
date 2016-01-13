@@ -60,15 +60,22 @@ class DataReader(object):
             tweetsCol.create_index([('loc', pymongo.GEOSPHERE)])
                 
     
-    def cluster(self, cells):
-        X = np.array([c['loc']['coordinates'] for c in cells])
-        k = len(X)/100
+    def cluster(self, tweets):
+        X = np.array([c['loc']['coordinates'] for c in tweets])
+        k = len(X)/10
+        k = 1 if k==0 else k
+        clusters = []
+        
         cluster_centroids, closest_centroids = kmeans2(X, k, minit='points')
         count = Counter(closest_centroids)
-        cluster_cells = [[cells[i]['_id'] for i in range(len(closest_centroids)) if closest_centroids[i]==j]
+        cluster_tweets = [[tweets[i] for i in range(len(closest_centroids)) if closest_centroids[i]==j]
                         for j in range(len(cluster_centroids))]
-        clusters  = [{'loc':{ 'type':'Point', 'coordinates':c.tolist() }, 'count':count[i],
-                    'cells': cluster_cells[i]} for i,c in enumerate(cluster_centroids)]
+
+        for i, t in enumerate(cluster_tweets):
+            t.sort(key=lambda d: d['retweets'], reverse=True)
+            txt = "\n".join(map(lambda d: d['tweet'], t[:5]))
+            clusters.append({'loc': cluster_centroids[i].tolist() , 'count':count[i],
+                                'text': txt})
 
         return clusters
 
@@ -97,13 +104,17 @@ class DataReader(object):
         result = self.db.hashtags.find({'hashtag': htag}, {'_id':0, 'places':1})
         result = list(result)
 
-        if includeTweet:
-            tweets = self.db.tweets.find({"hashtags": {"$in":[htag]},
+        tweets = self.db.tweets.find({"hashtags": {"$in":[htag]},
                                           "loc": {'$geoWithin':
                                                  {'$polygon': [  [ e, s ], [ e, n ], [ w, n ], [ w, s ],[ e, s ] ]}}
-                                          }, {"_id":0, "loc":1, "tweet":1})
-            tweets = list(tweets)
+                                          }, {"_id":0, "loc":1, "tweet":1, "retweets":1})
+        tweets = list(tweets)
+
+        if includeTweet:
             result[0]['tweets'] = tweets
+        else:
+            clusters = self.cluster(tweets)
+            result[0]['clusters'] = clusters
         
         return result
                                        

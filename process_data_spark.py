@@ -4,6 +4,7 @@ from __future__ import unicode_literals
 from pyspark import SparkContext, SparkConf
 from many_stop_words import get_stop_words
 from shapely.geometry import Polygon
+import pymongo_spark
 
 from nltk import wordpunct_tokenize
 from nltk.probability import FreqDist, ConditionalFreqDist
@@ -184,11 +185,12 @@ def process_partition(data):
 
 
 def main(data=None, fname=None):
+    
     logger = logging.getLogger('.log')
     conf = SparkConf().setAppName(APP_NAME)
 
-    for prop, val in CONF.items():
-        conf.set(prop, val)         #set configuration properties
+    for prop, val in CONF.items():          #set configuration properties
+        conf.set(prop, val)         
     
     sc = SparkContext(conf=conf, environment=ENV_VARS)
     
@@ -199,7 +201,7 @@ def main(data=None, fname=None):
         data_rdd = sc.parallelize(data)
         
     elif fname:
-        data_rdd = sc.textFile('file://%s/%s' %(APP_HOME, fname))
+        data_rdd = sc.textFile('%s://%s/%s' %(FILESYSTEM, APP_HOME, fname))
         data_rdd_json = read_json(data_rdd)
         
     else:           #read data from database
@@ -228,6 +230,7 @@ def main(data=None, fname=None):
     
             
 if __name__ == '__main__':
+    pymongo_spark.activate()
     main()
     
 
