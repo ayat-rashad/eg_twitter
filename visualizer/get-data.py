@@ -1,6 +1,7 @@
-from bottle import Bottle, run, static_file
+from bottle import Bottle, run, static_file, response
 from json import dumps
 from data_reader import DataReader
+import zlib
 
 app = Bottle()
 tweetsDB = DataReader()
@@ -24,6 +25,16 @@ def get_hashtag(htag, tweets, s, n, e, w):
 def get_by_area(s, n, e, w, tweets=False, NTags=10):
     data = tweetsDB.get_by_area(s, n, e, w, tweets, NTags)
     return dumps(data)
+
+@app.route('/graph/<by:path>', method='POST')
+def get_graph(by='words'):
+    if by == 'words':
+        data = tweetsDB.get_words_graph()
+    else:
+        pass
+
+    response.set_header('Content-Encoding', 'deflate')
+    return zlib.compress(dumps(data))
     
 
 run(app, host='0.0.0.0', port=8888, reloader=True)

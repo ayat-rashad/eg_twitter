@@ -117,6 +117,14 @@ class DataReader(object):
             result[0]['clusters'] = clusters
         
         return result
+
+
+    def get_words_graph(self):
+        nodes = self.db.wg_nodes.find({})
+        edges = self.db.wg_edges.find({}, {'_id':0})
+        result = {'nodes': list(nodes), 'edges': list(edges)}
+
+        return result
                                        
                                        
                             

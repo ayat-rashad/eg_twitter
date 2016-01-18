@@ -1,0 +1,150 @@
+<html>
+
+<head>
+    <title></title>
+    <meta charset="utf-8" />
+    <script src="d3.v3.min.js" type="text/JavaScript"></script>
+    <script src="colorbrewer.js" type="text/JavaScript"></script>
+    <script src="queue.js" type="text/JavaScript"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+
+</head>
+<style>
+    svg {
+        height: 600px;
+        width: 800px;
+        border: 1px solid gray;
+    }
+</style>
+
+<body>
+
+    <div id="network">
+        <svg>
+        </svg>
+    </div>
+    <div id="controls" />
+</body>
+<footer>
+
+    <script>
+        var marker = d3.select("svg").append('defs')
+            .append('marker')
+            .attr("id", "Triangle")
+            .attr("refX", 12)
+            .attr("refY", 6)
+            .attr("markerUnits", 'userSpaceOnUse')
+            .attr("markerWidth", 12)
+            .attr("markerHeight", 18)
+            .attr("orient", 'auto')
+            .append('path')
+            .attr("d", 'M 0 0 12 6 0 12 3 6');
+
+        $.post("/graph/words", function(data) {
+            data = $.parseJSON(data);
+            createForceLayout(data.nodes, data.edges);
+
+        });
+
+        function createForceLayout(nodes, edges) {
+            var nodeHash = {};
+            for (x in nodes) {
+                nodeHash[nodes[x]._id] = nodes[x];
+            }
+
+            for (var i = 0; i < edges.length; i++) {
+                //edges[i].weight = parseInt(edges[i].weight);
+                edges[i].source = nodeHash[edges[i].source];
+                edges[i].target = nodeHash[edges[i].target];
+            }
+
+            var chargeScale = d3.scale.linear().domain(d3.extent(nodes, function(d) {
+                return d.followers
+            })).range([-500, -2000])
+            var nodeSize = d3.scale.linear().domain(d3.extent(nodes, function(d) {
+                return d.count
+            })).range([16, 40])
+            var weightScale = d3.scale.linear().domain(d3.extent(edges, function(d) {
+                return d.weight
+            })).range([.2, .7])
+            force = d3.layout.force()
+                //.charge(-60)
+                .charge(function(d) {
+                    return d.count * -40
+                })
+                .gravity(.5)
+                //      .linkDistance(50)
+                //      .linkStrength(function (d) {return weightScale(d.weight)})
+                .size([800, 600]).nodes(nodes)
+                .links(edges).on("tick", forceTick);
+
+            d3.select("svg").selectAll("line.link").data(edges, function(d) {
+                    return d.source._id + "-" + d.target._id
+                }).enter()
+                .append("line")
+                .attr("class", "link")
+                .style("stroke", "black")
+                .style("opacity", .5)
+                .style("stroke-width", function(d) {
+                    return d.weight
+                });
+
+            var nodeEnter = d3.select("svg").selectAll("g.node").data(nodes, function(d) {
+                    return d._id
+                }).enter()
+                .append("g")
+                .attr("class", "node")
+                .call(force.drag())
+                .on("click", fixNode);
+
+            function fixNode(d) {
+                d3.select(this).select("circle").style("stroke-width", 4);
+                d.fixed = true;
+            }
+
+            nodeEnter.append("circle")
+                .attr("r", function(d) {
+                    return nodeSize(d.count);
+                })
+                .style("fill", "lightgray")
+                .style("stroke", "black")
+                .style("stroke-width", "1px");
+
+            nodeEnter.append("text")
+                .style("text-anchor", "middle")
+                .attr("y", 7)
+                .text(function(d) {
+                    return d._id
+                })
+
+            force.linkStrength(function(d) {
+                return weightScale(d.weight);
+            });
+            //d3.selectAll("line").attr("marker-end", "url(#Triangle)");
+            force.start();
+
+            function forceTick() {
+                d3.selectAll("line.link")
+                    .attr("x1", function(d) {
+                        return d.source.x
+                    })
+                    .attr("x2", function(d) {
+                        return d.target.x
+                    })
+                    .attr("y1", function(d) {
+                        return d.source.y
+                    })
+                    .attr("y2", function(d) {
+                        return d.target.y
+                    });
+
+                d3.selectAll("g.node")
+                    .attr("transform", function(d) {
+                        return "translate(" + d.x + "," + d.y + ")"
+                    })
+            }
+        }
+    </script>
+</footer>
+
+</html>
