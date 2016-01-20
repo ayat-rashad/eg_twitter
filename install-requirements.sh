@@ -36,3 +36,9 @@ cd mongo-hadoop
 
 cd spark/src/main/python
 python2.7 setup.py install
+
+#install TinySVM and Yamcha
+cd yamcha-0.33/TinySVM-0.09
+sudo make install
+cd ..
+sudo make install
