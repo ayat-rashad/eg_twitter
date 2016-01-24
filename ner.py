@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 from nltk import wordpunct_tokenize
 from nltk.probability import FreqDist, ConditionalFreqDist
+from pyspark import SparkFiles
 
 import re, string, nltk, sys
 import json, os, logging
 from collections import defaultdict
+import subprocess
 
 from pos_tag import postag_sents, segment_sents
 from langdetect import detect
@@ -70,26 +72,21 @@ def transString(string, reverse=0):
         for k,v in buck2uni.iteritems():
             string = string.replace(k,v)
 
-    return string
+    return string 
 
 
 def read_sents(fname='nes.txt'):
     LINE_DELIM = '##'
+    sent = []
     
-    def read(f):
-        sent = []
+    with open(fname) as f:
         for token in f:
             token = token.strip()
-            if not token.startswith(LINE_DELIM):
-                sent.append(tuple(token.split(' ')))
-            else:
+            if token.startswith(LINE_DELIM):
                 yield sent
                 sent = []
-
-    with open(fname) as f:
-        sents = [sent for sent in read(f)]
-
-    return sents
+            else:
+                sent.append(tuple(re.split('\s+', token)))                
 
 
 def write_sents(data, fname='trans.txt'):
@@ -99,6 +96,9 @@ def write_sents(data, fname='trans.txt'):
         for d in data:
             txt = '\n'.join([t[0] for t in d['trans_tokens']])
             txt += '\n%s\n' % LINE_DELIM
+            if prnt:
+                print txt
+                prnt = False
             try:
                 f.write(txt)
             except UnicodeEncodeError as e:
@@ -112,17 +112,39 @@ def find_nes(data):         #find named entities
     infile = "trans.txt"
     outfile = "nes.txt"
     write_sents(data)
-    result = subprocess.call(["yamcha", "-m NER.model", infile, "-o %s" %outfile])
+    #result = subprocess.call(["yamcha", "-m %s" %SparkFiles.get('NER.model'), infile, "-o %s" %outfile])
+    result = subprocess.call("yamcha -m /home/ubuntu/eg_twitter2/NER.model %s -o %s" %(infile,outfile), shell=True)
 
-    if result != 0:
-        print("NER process error.")
-        return False
+    #if result != 0:
+        #raise Exception("NER process error.")
 
     ner_result = read_sents(outfile)
+    ner_result2 = []
 
-    for nes, d in zip(ner_result, data):
-        ne_list = [ne for ne in nes if ne[1]!='O']
-        d['nes'] = ne_list
+    for nes in ner_result:
+        ne_list = []
+        ne_group = []
+        
+        for ne in nes:          #group named entity partes (B-, I-)
+            if ne[0] == '':
+                continue
+            #try:
+            if ne[1].startswith('B'):
+                if ne_group:
+                    ne_list.append([transString(n, True) for n in ne_group])
+                ne_group = [ne[0]]
+            elif ne[1].startswith('I'):
+                ne_group.append(ne[0])
+            #except:
+                #pass
+                #print 'NE:', ne
+        if ne_group:
+            ne_list.append([transString(n, True) for n in ne_group])
+                
+        #ne_list = [ne for ne in nes if ne[1]!='O']
+        ner_result2.append(ne_list)
+
+    return ner_result2
 
 
 def find_colloc(data):          #find most common collocations
@@ -153,7 +175,7 @@ def find_colloc(data):          #find most common collocations
     return bigrams
 
 
-def read_json(data):
+'''def read_json(data):
     def load(d):
         try:
             d = json.loads(d)
@@ -162,11 +184,7 @@ def read_json(data):
     data = map(load, data)
     data = filter(lambda t: t!=None, data)
 
-    return data
-
-
-def process_partition(data):
-    pass
+    return data'''
 
 
 if __name__ == '__main__':

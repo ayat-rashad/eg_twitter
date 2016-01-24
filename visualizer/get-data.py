@@ -14,17 +14,22 @@ def send_static(filename):
 @app.route('/hashtags/<sortBy:path>/<tweets:int>/<NTags:int>', method='POST')
 def get_by_hashtag(sortBy='mentions', tweets=False, NTags=10):
     data = tweetsDB.get_by_hashtag(sortBy, tweets, NTags)
-    return dumps(data)
+    response.set_header('Content-Encoding', 'deflate')
+    return zlib.compress(dumps(data))
+
 
 @app.route('/hashtag/<htag:path>/<tweets:int>/<s:float>/<n:float>/<e:float>/<w:float>', method='POST')
 def get_hashtag(htag, tweets, s, n, e, w):
     data = tweetsDB.get_hashtag(htag, tweets, s, n, e, w)
-    return dumps(data)
+    response.set_header('Content-Encoding', 'deflate')
+    return zlib.compress(dumps(data))
+
 
 @app.route('/areas/<s:float>/<n:float>/<e:float>/<w:float>/<tweets:int>/<NTags:int>', method='POST')
 def get_by_area(s, n, e, w, tweets=False, NTags=10):
     data = tweetsDB.get_by_area(s, n, e, w, tweets, NTags)
     return dumps(data)
+
 
 @app.route('/graph/<by:path>', method='POST')
 def get_graph(by='words'):
