@@ -1,0 +1,6 @@
+{
+  "name": "Eg twitter",
+  "tagline": "what's going on on Egyptian twitter this month! what the people are talking about?",
+  "body": "# EG_twitter\r\nwhat's going on on Egyptian twitter this month!\r\n\r\n#### Development stack:\r\nPython, NLTK, Spark, Twitter Stremaing API.\r\n",
+  "note": "Don't delete this file! It's used internally to help with page regeneration."
+}
